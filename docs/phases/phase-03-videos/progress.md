@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 10/11 completed
+**SIs:** 11/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -79,6 +79,7 @@
   - `openapi.json` regenerated: 7 `/videos` paths plus response schemas; request DTO schemas remain empty because of the pre-existing ts-node export limitation noted in SI-03.5.
 
 ### SI-03.11 — Atualizar documentação de IA e arquitetura
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** no tests (documentation only)
+- **Observations:** 
+  - Root `CLAUDE.md` architecture list now names BullMQ on Redis, the `video-worker` service and MinIO; `nestjs-project/CLAUDE.md` gained readiness checks, services, worker commands, video test conventions and a "Videos" section; `docs/diagrams/software-arch.mermaid` queue is no longer `TBD`.
