@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 2/11 completed
+**SIs:** 3/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -20,9 +20,13 @@
   - `responseChecksumValidation: 'WHEN_REQUIRED'` set alongside `requestChecksumCalculation` so presigned GETs are not checksum-validated against MinIO.
 
 ### SI-03.3 — Criar entidade Video, migration e lookup de canal
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 121/121 passing across 16 suites (video.entity.integration-spec.ts, migrations.integration-spec.ts, channels.service.integration-spec.ts + auth/users/channels suites re-run because their entity lists now include Video)
+- **Observations:** 
+  - `.claude/rules/nestjs-entities.md` requires `@PrimaryGeneratedColumn('uuid')` and both relation sides: `Video.id` keeps that decorator (the service-assigned id is still honored on insert) and `Channel` gained `@OneToMany videos` — the plan's Data Model said no inverse collection; the rule wins.
+  - Every existing test DataSource that registers `Channel` had to add `Video` to its entity list (TypeORM fails to build `Channel#videos` metadata otherwise).
+  - The local `streamtube` DB is shared by dev and tests; an earlier interrupted parallel test run had dropped the `migrations` table while synchronize-created tables remained, so `migration:run` failed. The local schema was reset and all 3 migrations applied cleanly.
+  - `migrations.integration-spec.ts` now also drops leftover enum types before re-applying — fixes the pre-existing `type "verification_tokens_type_enum" already exists` failure seen in the baseline run.
 
 ### SI-03.4 — Infra: fila BullMQ compartilhada e contrato do job
 - **Status:** pending
