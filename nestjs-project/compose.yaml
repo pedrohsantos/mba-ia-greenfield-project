@@ -1,6 +1,6 @@
 services:
   nestjs-api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.dev
     ports:
@@ -12,6 +12,10 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   db:
     image: postgres:17
@@ -33,4 +37,53 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  # Message queue backend for BullMQ (video processing jobs).
+  redis:
+    image: redis:8.8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # S3-compatible object storage for video files and thumbnails.
+  # minio/minio is no longer published on Docker Hub; Chainguard's image is pinned by digest.
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:709099319add48dfb44aa596a7070d3ddd8dd04d7ae881765719aec29df9e510
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${S3_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${S3_SECRET_KEY}
+      # Incomplete multipart uploads are expired by the server after 7 days.
+      - MINIO_API_STALE_UPLOADS_EXPIRY=168h
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /minio/health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot bucket provisioning (idempotent).
+  minio-init:
+    image: cgr.dev/chainguard/minio-client@sha256:3d0109d854f045c0158637d6ad0d44fd8a3aef9f0b62082096eb1854c2df8b31
+    environment:
+      - MC_HOST_local=http://${S3_ACCESS_KEY}:${S3_SECRET_KEY}@minio:9000
+    command: ["mb", "--ignore-existing", "local/${S3_BUCKET}"]
+    depends_on:
+      minio:
+        condition: service_healthy
+
+volumes:
+  minio-data:

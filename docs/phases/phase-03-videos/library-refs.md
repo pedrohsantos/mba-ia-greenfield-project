@@ -9,7 +9,7 @@ libs:
     context7_id: "/nestjs/docs.nestjs.com"
     fetched_at: "2026-10-18T17:12:00-03:00"
   "ioredis":
-    version: "^6.0.0"
+    version: "^5.11.1"
     context7_id: "/redis/ioredis"
     fetched_at: "2026-10-18T17:12:00-03:00"
   "@aws-sdk/client-s3":
@@ -53,7 +53,7 @@ _Used by: `phase-03-videos/TD-01`, `phase-03-videos/TD-04`._
 
 _Used by: `phase-03-videos/TD-01` (peer of bullmq)._
 
-- **v6.0.0 breaking changes:** Node.js ≥ 20 (container runs Node 25 — OK) and **RESP3 by default** (`protocol: 2` restores v5 wire protocol). Redis 8 supports RESP3. Only installed as BullMQ's peer; the app never instantiates `Redis` directly.
+- **Pinned to `^5.11.1`, not 6.x:** `typeorm@0.3.28` declares `peerOptional ioredis@^5.0.4` and npm refuses `ioredis@6` (ERESOLVE during SI-03.1); `5.11.1` also satisfies BullMQ 6's `ioredis >=5` peer. For reference, v6.0.0 breaking changes are Node.js ≥ 20 and RESP3 by default. Only installed as BullMQ's peer; the app never instantiates `Redis` directly.
 
 ### @aws-sdk/client-s3
 
