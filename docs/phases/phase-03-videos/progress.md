@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 1/11 completed
+**SIs:** 2/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -13,9 +13,11 @@
   - Host port 5432 was held by another project's container (`postgres_rag`), stopped to bring the stack up (outside this repo).
 
 ### SI-03.2 — Implementar StorageModule (S3/MinIO)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 6/6 passing (storage.service.integration-spec.ts, storage.module.spec.ts)
+- **Observations:** 
+  - S3 clients are DI providers (`STORAGE_CLIENTS.INTERNAL`/`PUBLIC`) built in `StorageModule` instead of `new` inside the service, per the DI convention.
+  - `responseChecksumValidation: 'WHEN_REQUIRED'` set alongside `requestChecksumCalculation` so presigned GETs are not checksum-validated against MinIO.
 
 ### SI-03.3 — Criar entidade Video, migration e lookup de canal
 - **Status:** pending
