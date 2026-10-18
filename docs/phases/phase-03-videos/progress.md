@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 4/11 completed
+**SIs:** 5/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -36,9 +36,11 @@
   - Fixed a `tsc` error found while checking: `fetch` in `storage.service.integration-spec.ts` (SI-03.2) needed `Uint8Array` instead of `Buffer` as body type.
 
 ### SI-03.5 — Iniciar upload com pré-cadastro em rascunho e retomada
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 29/29 passing (video-slug.util.spec.ts, videos.service.spec.ts, videos.service.integration-spec.ts, videos.module.spec.ts; videos.e2e-spec.ts 10 e2e)
+- **Observations:** 
+  - E2E users are created directly (confirmed user + `ChannelsService.createChannel` + token from the app's `JwtService`) in `test/helpers/videos-e2e.helpers.ts`; the register/confirm/login flow stays covered by `auth.e2e-spec.ts`.
+  - Pre-existing gap (out of scope): `npm run openapi:export` runs through ts-node, so the `@nestjs/swagger` CLI plugin is not applied and request DTO schemas come out empty in `openapi.json` (already true for `RegisterDto` etc.). Response DTOs here use explicit `@ApiProperty` per the DTO rule, so they export correctly.
 
 ### SI-03.6 — Concluir e abortar upload com enfileiramento do processamento
 - **Status:** pending
