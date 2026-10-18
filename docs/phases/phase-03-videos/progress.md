@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 9/11 completed
+**SIs:** 10/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -71,9 +71,12 @@
   - Malformed slugs are rejected as `VIDEO_NOT_FOUND` before any query (no validation error leaks the slug format).
 
 ### SI-03.10 — Fluxo completo de upload, processamento e streaming (E2E)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 13/13 passing (videos-flow.e2e-spec.ts 3 e2e: ready in ~0.9s, failure path ~16s through 3 attempts with backoff; openapi-export.integration-spec.ts 10)
+- **Observations:** 
+  - The flow e2e boots `WorkerModule` in-process via `NestFactory.createApplicationContext` with the test `QUEUE_PREFIX`; the Compose `video-worker` (prefix `streamtube`) keeps running and never sees these jobs.
+  - A random-bytes file fails in `ffprobe` (a regular error, not `UnrecoverableError`), so it goes through all 3 attempts before `failed` — consistent with TD-08's retry policy.
+  - `openapi.json` regenerated: 7 `/videos` paths plus response schemas; request DTO schemas remain empty because of the pre-existing ts-node export limitation noted in SI-03.5.
 
 ### SI-03.11 — Atualizar documentação de IA e arquitetura
 - **Status:** pending
