@@ -4,7 +4,7 @@ name: phase-03-videos
 test_specs_aware: true
 sources_mtime:
   docs/phases/phase-03-videos/context.md: "2026-10-18T17:14:29-03:00"
-  docs/phases/phase-03-videos/library-refs.md: "2026-10-18T17:12:58-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-10-18T17:33:13-03:00"
   docs/decisions/technical-decisions-phase-03-videos.md: "2026-10-18T17:12:48-03:00"
 ---
 

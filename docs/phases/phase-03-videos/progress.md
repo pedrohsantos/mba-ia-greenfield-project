@@ -1,6 +1,6 @@
 # phase-03-videos — Progress
 
-**Status:** in_progress
+**Status:** completed
 **SIs:** 11/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
@@ -83,3 +83,21 @@
 - **Tests:** no tests (documentation only)
 - **Observations:** 
   - Root `CLAUDE.md` architecture list now names BullMQ on Redis, the `video-worker` service and MinIO; `nestjs-project/CLAUDE.md` gained readiness checks, services, worker commands, video test conventions and a "Videos" section; `docs/diagrams/software-arch.mermaid` queue is no longer `TBD`.
+
+## Final verification
+
+- **Unit + integration:** 218/218 passing, 37 suites (`docker compose exec nestjs-api npm test -- --runInBand`)
+- **E2E:** 75/75 passing, 5 suites (`docker compose exec nestjs-api npm run test:e2e`) — includes `videos.e2e-spec.ts` and `videos-flow.e2e-spec.ts`
+- **Type-check:** `npx tsc --noEmit` exit 0
+- **Lint:** `npm run lint` exit 0 (0 errors; 23 warnings from rules configured as `warn`)
+- **Build:** `npm run build` exit 0 — emits `dist/main.js` and `dist/worker.js`
+- **Compose smoke:** `docker compose up -d` brings up `db`, `mailpit`, `redis` (healthy), `minio` (healthy), `minio-init` (exit 0), `nestjs-api` and `video-worker`; a real upload completed with the default `QUEUE_PREFIX` was consumed by the `video-worker` container and reached `ready` (duration 3 s, 320x240 h264/aac, `thumbnails/{id}.jpg`)
+- **Observations:**
+  - `npm run lint` already failed before Phase 03 (151 errors in Phase 01/02 tests and `channels.service.ts`). Per user decision they were fixed on this branch in a separate commit (`fix(lint): type pre-existing Phase 01/02 tests…`) with typed casts, typed Mailpit helpers and a `mockFn()` test helper — no ESLint rule was relaxed.
+
+## Out-of-scope follow-ups
+
+- `openapi:export` runs through ts-node, so the `@nestjs/swagger` CLI plugin is not applied and request DTO schemas are empty in `openapi.json` (pre-existing; affects Phase 02 DTOs too).
+- `draft` videos whose upload is silently abandoned stay `draft` in the DB (storage parts are expired by MinIO after 7 days); a DB sweep belongs to Phase 04's draft management (`phase-03-videos/TD-11`, Option C deferred).
+- Root `CLAUDE.md` still says `next-frontend/` is "not yet initialized", which predates this phase.
+
