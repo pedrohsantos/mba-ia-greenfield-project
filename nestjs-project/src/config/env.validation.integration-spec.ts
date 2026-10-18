@@ -10,11 +10,16 @@ const requiredEnv = {
   S3_SECRET_KEY: 'secret-key',
 };
 
-const validate = (env: Record<string, string>) =>
+interface EnvValidation {
+  error?: Error;
+  value: Record<string, unknown>;
+}
+
+const validate = (env: Record<string, string>): EnvValidation =>
   envValidationSchema.validate(
     { ...requiredEnv, ...env },
     { allowUnknown: true, abortEarly: false },
-  );
+  ) as EnvValidation;
 
 describe('envValidationSchema — SWAGGER_ENABLED', () => {
   it('should reject SWAGGER_ENABLED with an invalid value', () => {
@@ -45,7 +50,7 @@ describe('envValidationSchema — storage and queue', () => {
     const { error } = envValidationSchema.validate(
       { ...requiredEnv, S3_ACCESS_KEY: undefined },
       { allowUnknown: true, abortEarly: false },
-    );
+    ) as EnvValidation;
     expect(error).toBeDefined();
     expect(error!.message).toContain('S3_ACCESS_KEY');
   });
@@ -54,7 +59,7 @@ describe('envValidationSchema — storage and queue', () => {
     const { error } = envValidationSchema.validate(
       { ...requiredEnv, S3_SECRET_KEY: undefined },
       { allowUnknown: true, abortEarly: false },
-    );
+    ) as EnvValidation;
     expect(error).toBeDefined();
     expect(error!.message).toContain('S3_SECRET_KEY');
   });
