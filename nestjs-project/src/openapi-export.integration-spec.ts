@@ -128,4 +128,13 @@ describe('exportSpec (integration)', () => {
       }
     }
   });
+
+  it('includes the video upload, processing and playback paths', () => {
+    const paths = document.paths as Record<string, Record<string, unknown>>;
+    expect(paths['/videos/uploads']).toHaveProperty('post');
+    expect(paths['/videos/{id}/upload/complete']).toHaveProperty('post');
+    expect(paths['/videos/{id}/upload']).toHaveProperty('delete');
+    expect(paths['/videos/{slug}/stream']).toHaveProperty('get');
+    expect(paths['/videos/{slug}/download']).toHaveProperty('get');
+  });
 });

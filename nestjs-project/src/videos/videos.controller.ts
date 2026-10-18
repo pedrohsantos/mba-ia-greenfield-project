@@ -1,0 +1,314 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  getSchemaPath,
+} from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
+import type { JwtPayload } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
+import { CompleteUploadDto } from './dto/complete-upload.dto';
+import { InitiateUploadDto } from './dto/initiate-upload.dto';
+import {
+  DownloadUrlResponseDto,
+  StreamUrlResponseDto,
+} from './dto/playback-response.dto';
+import { SignPartsDto } from './dto/sign-parts.dto';
+import {
+  InitiateUploadResponseDto,
+  SignedPartsResponseDto,
+  UploadStatusResponseDto,
+} from './dto/upload-response.dto';
+import { VideoResponseDto } from './dto/video-response.dto';
+import { VideosService } from './videos.service';
+
+const errorSchema = { $ref: getSchemaPath(ApiErrorEnvelope) };
+
+@ApiTags('videos')
+@ApiBearerAuth('access-token')
+@SkipThrottle()
+@Controller('videos')
+export class VideosController {
+  constructor(private readonly videosService: VideosService) {}
+
+  @Post('uploads')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Start a video upload',
+    description:
+      'Pre-registers the video as draft in the caller channel, opens a multipart upload in object storage and returns presigned URLs to PUT each part directly to storage (no file bytes go through the API).',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Upload started',
+    type: InitiateUploadResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation failed (size above 10 GiB, unsupported type…)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Channel not found (CHANNEL_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  async initiateUpload(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: InitiateUploadDto,
+  ): Promise<InitiateUploadResponseDto> {
+    return this.videosService.initiateUpload(user.sub, dto);
+  }
+
+  @Post(':id/upload/parts')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Re-sign part upload URLs',
+    description:
+      'Returns fresh presigned URLs for the given parts of an in-progress upload (expired URLs or resume).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Presigned part URLs',
+    type: SignedPartsResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation failed or part number out of range',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found (VIDEO_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not a draft (INVALID_VIDEO_STATUS)',
+    schema: errorSchema,
+  })
+  async signParts(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SignPartsDto,
+  ): Promise<SignedPartsResponseDto> {
+    return this.videosService.signParts(user.sub, id, dto.partNumbers);
+  }
+
+  @Get(':id/upload')
+  @ApiOperation({
+    summary: 'Get upload progress',
+    description:
+      'Lists the parts already stored for an in-progress upload, so the client can resume it.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload progress',
+    type: UploadStatusResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found (VIDEO_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not a draft (INVALID_VIDEO_STATUS)',
+    schema: errorSchema,
+  })
+  async getUploadStatus(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<UploadStatusResponseDto> {
+    return this.videosService.getUploadStatus(user.sub, id);
+  }
+
+  @Post(':id/upload/complete')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Complete a video upload',
+    description:
+      'Completes the multipart upload with the uploaded parts and their ETags, verifies the stored size, moves the video to processing and enqueues the video.process job (metadata + thumbnail run in the background worker).',
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'Upload completed; processing scheduled',
+    type: VideoResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Validation failed, invalid parts (UPLOAD_PARTS_INVALID) or size mismatch (UPLOAD_SIZE_MISMATCH)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found (VIDEO_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not a draft (INVALID_VIDEO_STATUS)',
+    schema: errorSchema,
+  })
+  async completeUpload(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CompleteUploadDto,
+  ): Promise<VideoResponseDto> {
+    return this.videosService.completeUpload(user.sub, id, dto.parts);
+  }
+
+  @Delete(':id/upload')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Abort a video upload',
+    description:
+      'Aborts the in-progress multipart upload (storage frees the parts) and marks the video as failed with reason UPLOAD_ABORTED.',
+  })
+  @ApiResponse({ status: 204, description: 'Upload aborted' })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found (VIDEO_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not a draft (INVALID_VIDEO_STATUS)',
+    schema: errorSchema,
+  })
+  async abortUpload(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.videosService.abortUpload(user.sub, id);
+  }
+
+  @Get(':slug')
+  @ApiOperation({
+    summary: 'Get a video by its unique URL slug',
+    description:
+      'Returns the video (status, metadata, duration, thumbnail URL) owned by the caller.',
+  })
+  @ApiResponse({ status: 200, description: 'Video', type: VideoResponseDto })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found (VIDEO_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  async getVideo(
+    @CurrentUser() user: JwtPayload,
+    @Param('slug') slug: string,
+  ): Promise<VideoResponseDto> {
+    return this.videosService.getVideo(user.sub, slug);
+  }
+
+  @Get(':slug/stream')
+  @ApiOperation({
+    summary: 'Get a streaming URL',
+    description:
+      'Authorizes playback and returns a short-lived presigned URL; object storage serves HTTP Range requests with 206 Partial Content, so playback starts without downloading the whole file.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Streaming URL',
+    type: StreamUrlResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found (VIDEO_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not ready (VIDEO_NOT_READY)',
+    schema: errorSchema,
+  })
+  async getStreamUrl(
+    @CurrentUser() user: JwtPayload,
+    @Param('slug') slug: string,
+  ): Promise<StreamUrlResponseDto> {
+    return this.videosService.getStreamUrl(user.sub, slug);
+  }
+
+  @Get(':slug/download')
+  @ApiOperation({
+    summary: 'Get a download URL',
+    description:
+      'Returns a short-lived presigned URL that downloads the original file as an attachment.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Download URL',
+    type: DownloadUrlResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found (VIDEO_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not ready (VIDEO_NOT_READY)',
+    schema: errorSchema,
+  })
+  async getDownloadUrl(
+    @CurrentUser() user: JwtPayload,
+    @Param('slug') slug: string,
+  ): Promise<DownloadUrlResponseDto> {
+    return this.videosService.getDownloadUrl(user.sub, slug);
+  }
+}
