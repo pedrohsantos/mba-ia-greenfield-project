@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 6/11 completed
+**SIs:** 7/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -50,9 +50,10 @@
   - Size-mismatch path persists `failure_reason = 'UPLOAD_SIZE_MISMATCH'` (same code as the Error Catalog) before throwing.
 
 ### SI-03.7 — Implementar MediaProbeService (ffprobe/ffmpeg)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 11/11 passing (ffprobe-output.parser.spec.ts, media-probe.service.integration-spec.ts)
+- **Observations:** 
+  - Frame rate is read from `avg_frame_rate` with `r_frame_rate` as fallback; `0/0` (unknown) maps to `null`.
 
 ### SI-03.8 — Processar vídeos no worker dedicado (fila → metadados → thumbnail)
 - **Status:** pending
