@@ -87,9 +87,12 @@ describe('VideoProcessingService', () => {
 
     await expect(service.process('v1')).resolves.toBe('ready');
 
-    expect(storage.presignGetObject).toHaveBeenCalledWith('videos/v1/original', {
-      endpoint: 'internal',
-    });
+    expect(storage.presignGetObject).toHaveBeenCalledWith(
+      'videos/v1/original',
+      {
+        endpoint: 'internal',
+      },
+    );
     expect(probe.extractThumbnail).toHaveBeenCalledWith(
       'http://minio:9000/signed',
       12,

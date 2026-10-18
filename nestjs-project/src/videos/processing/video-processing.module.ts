@@ -15,6 +15,10 @@ import { VideoProcessingService } from './video-processing.service';
     BullModule.registerQueue({ name: VIDEO_PROCESSING_QUEUE }),
     StorageModule,
   ],
-  providers: [MediaProbeService, VideoProcessingService, VideoProcessingProcessor],
+  providers: [
+    MediaProbeService,
+    VideoProcessingService,
+    VideoProcessingProcessor,
+  ],
 })
 export class VideoProcessingModule {}

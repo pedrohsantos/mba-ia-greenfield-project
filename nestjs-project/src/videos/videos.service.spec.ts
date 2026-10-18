@@ -89,13 +89,14 @@ describe('VideosService', () => {
       created_at: new Date(),
       updated_at: new Date(),
     }));
-    repo.save.mockImplementation(async (v: Video) => v);
+    repo.save.mockImplementation((v: Video) => Promise.resolve(v));
     storage.createMultipartUpload.mockResolvedValue('upload-1');
     storage.presignUploadPart.mockImplementation(
-      async (_k: string, _u: string, n: number) => ({
-        url: `http://minio/part-${n}`,
-        expiresAt: new Date('2026-01-01T01:00:00Z'),
-      }),
+      (_k: string, _u: string, n: number) =>
+        Promise.resolve({
+          url: `http://minio/part-${n}`,
+          expiresAt: new Date('2026-01-01T01:00:00Z'),
+        }),
     );
 
     const moduleRef = await Test.createTestingModule({
@@ -131,7 +132,7 @@ describe('VideosService', () => {
 
       const result = await service.initiateUpload(USER_ID, dto);
 
-      const saved = repo.save.mock.calls[0][0] as Video;
+      const [[saved]] = repo.save.mock.calls as [Video][];
       expect(saved).toMatchObject({
         channel_id: CHANNEL.id,
         title: 'aula de redes',
@@ -159,12 +160,12 @@ describe('VideosService', () => {
       channels.findByUserId.mockResolvedValue(CHANNEL);
       repo.save
         .mockRejectedValueOnce(slugCollision())
-        .mockImplementation(async (v: Video) => v);
+        .mockImplementation((v: Video) => Promise.resolve(v));
 
       await service.initiateUpload(USER_ID, dto);
 
       expect(repo.save).toHaveBeenCalledTimes(2);
-      const [first, second] = repo.save.mock.calls.map((c) => c[0] as Video);
+      const [[first], [second]] = repo.save.mock.calls as [Video][];
       expect(first.id).toBe(second.id);
     });
 
@@ -240,11 +241,13 @@ describe('VideosService', () => {
     it('should commit the processing status before enqueueing video.process', async () => {
       storage.getObjectSize.mockResolvedValue(1024);
       const order: string[] = [];
-      repo.update.mockImplementation(async () => {
+      repo.update.mockImplementation(() => {
         order.push('update');
+        return Promise.resolve();
       });
-      queue.add.mockImplementation(async () => {
+      queue.add.mockImplementation(() => {
         order.push('enqueue');
+        return Promise.resolve();
       });
 
       const result = await service.completeUpload(USER_ID, 'video-1', parts);
@@ -280,7 +283,9 @@ describe('VideosService', () => {
       await expect(
         service.completeUpload(USER_ID, 'video-1', parts),
       ).rejects.toBeInstanceOf(UploadSizeMismatchException);
-      expect(storage.deleteObject).toHaveBeenCalledWith('videos/video-1/original');
+      expect(storage.deleteObject).toHaveBeenCalledWith(
+        'videos/video-1/original',
+      );
       expect(repo.update).toHaveBeenCalledWith(
         'video-1',
         expect.objectContaining({ status: VideoStatus.FAILED }),
@@ -336,7 +341,9 @@ describe('VideosService', () => {
     });
 
     it('should refuse to stream a video that is not ready', async () => {
-      repo.findOne.mockResolvedValue(buildVideo({ status: VideoStatus.PROCESSING }));
+      repo.findOne.mockResolvedValue(
+        buildVideo({ status: VideoStatus.PROCESSING }),
+      );
 
       await expect(
         service.getStreamUrl(USER_ID, 'AbCdEfGhIjK'),

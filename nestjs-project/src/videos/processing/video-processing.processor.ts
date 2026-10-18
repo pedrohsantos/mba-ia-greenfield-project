@@ -12,7 +12,10 @@ export function isFinalFailure(
   job: Pick<Job, 'attemptsMade' | 'opts'>,
   error: Error,
 ): boolean {
-  if (error instanceof UnrecoverableError || error.name === 'UnrecoverableError') {
+  if (
+    error instanceof UnrecoverableError ||
+    error.name === 'UnrecoverableError'
+  ) {
     return true;
   }
   return job.attemptsMade >= (job.opts.attempts ?? 1);

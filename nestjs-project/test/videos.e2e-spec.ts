@@ -17,6 +17,10 @@ import type {
 const PART_SIZE = 64 * 1024 * 1024;
 const TEN_GIB = 10 * 1024 * 1024 * 1024;
 
+function errorOf(res: request.Response): string {
+  return (res.body as { error: string }).error;
+}
+
 interface InitiateBody {
   video: { id: string; slug: string; status: string; title: string };
   uploadId: string;
@@ -103,17 +107,21 @@ describe('Videos (e2e)', () => {
         })
         .expect(400);
 
-      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(errorOf(res)).toBe('VALIDATION_ERROR');
     });
 
     it('rejects an unsupported content type with VALIDATION_ERROR', async () => {
       const res = await request(server())
         .post('/videos/uploads')
         .set('Authorization', `Bearer ${owner.token}`)
-        .send({ fileName: 'doc.pdf', contentType: 'application/pdf', sizeBytes: 10 })
+        .send({
+          fileName: 'doc.pdf',
+          contentType: 'application/pdf',
+          sizeBytes: 10,
+        })
         .expect(400);
 
-      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(errorOf(res)).toBe('VALIDATION_ERROR');
     });
 
     it('accepts exactly 10 GiB', async () => {
@@ -164,7 +172,9 @@ describe('Videos (e2e)', () => {
         .send({ partNumbers: [2, 3] })
         .expect(200);
 
-      expect(res.body.parts.map((p: { partNumber: number }) => p.partNumber)).toEqual([2, 3]);
+      expect((res.body as InitiateBody).parts.map((p) => p.partNumber)).toEqual(
+        [2, 3],
+      );
     });
 
     it('POST /videos/:id/upload/parts rejects a part above partCount', async () => {
@@ -176,7 +186,7 @@ describe('Videos (e2e)', () => {
         .send({ partNumbers: [4] })
         .expect(400);
 
-      expect(res.body.error).toBe('UPLOAD_PARTS_INVALID');
+      expect(errorOf(res)).toBe('UPLOAD_PARTS_INVALID');
     });
 
     it('returns 404 VIDEO_NOT_FOUND to another user', async () => {
@@ -187,7 +197,7 @@ describe('Videos (e2e)', () => {
         .set('Authorization', `Bearer ${stranger.token}`)
         .expect(404);
 
-      expect(res.body.error).toBe('VIDEO_NOT_FOUND');
+      expect(errorOf(res)).toBe('VIDEO_NOT_FOUND');
     });
 
     it('rejects a non-UUID id with VALIDATION_ERROR', async () => {
@@ -196,7 +206,7 @@ describe('Videos (e2e)', () => {
         .set('Authorization', `Bearer ${owner.token}`)
         .expect(400);
 
-      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(errorOf(res)).toBe('VALIDATION_ERROR');
     });
   });
 
@@ -216,7 +226,10 @@ describe('Videos (e2e)', () => {
         .send({ parts: [{ partNumber: 1, etag }] })
         .expect(202);
 
-      expect(res.body).toMatchObject({ id: init.video.id, status: 'processing' });
+      expect(res.body).toMatchObject({
+        id: init.video.id,
+        status: 'processing',
+      });
       const job = await ctx.moduleRef
         .get<Queue>(getQueueToken(VIDEO_PROCESSING_QUEUE))
         .getJob(init.video.id);
@@ -238,7 +251,7 @@ describe('Videos (e2e)', () => {
         .send(body)
         .expect(409);
 
-      expect(res.body.error).toBe('INVALID_VIDEO_STATUS');
+      expect(errorOf(res)).toBe('INVALID_VIDEO_STATUS');
     });
 
     it('returns 400 UPLOAD_PARTS_INVALID for a tampered ETag and keeps the draft', async () => {
@@ -247,10 +260,14 @@ describe('Videos (e2e)', () => {
       const res = await request(server())
         .post(`/videos/${init.video.id}/upload/complete`)
         .set('Authorization', `Bearer ${owner.token}`)
-        .send({ parts: [{ partNumber: 1, etag: '"deadbeefdeadbeefdeadbeefdeadbeef"' }] })
+        .send({
+          parts: [
+            { partNumber: 1, etag: '"deadbeefdeadbeefdeadbeefdeadbeef"' },
+          ],
+        })
         .expect(400);
 
-      expect(res.body.error).toBe('UPLOAD_PARTS_INVALID');
+      expect(errorOf(res)).toBe('UPLOAD_PARTS_INVALID');
       const [{ status }] = await ctx.dataSource.query<{ status: string }[]>(
         `SELECT status FROM videos WHERE id = $1`,
         [init.video.id],
@@ -268,8 +285,13 @@ describe('Videos (e2e)', () => {
 
       const [row] = await ctx.dataSource.query<
         { status: string; failure_reason: string }[]
-      >(`SELECT status, failure_reason FROM videos WHERE id = $1`, [init.video.id]);
-      expect(row).toEqual({ status: 'failed', failure_reason: 'UPLOAD_ABORTED' });
+      >(`SELECT status, failure_reason FROM videos WHERE id = $1`, [
+        init.video.id,
+      ]);
+      expect(row).toEqual({
+        status: 'failed',
+        failure_reason: 'UPLOAD_ABORTED',
+      });
     });
 
     it('returns 409 when aborting a video that is already processing', async () => {
@@ -285,7 +307,7 @@ describe('Videos (e2e)', () => {
         .set('Authorization', `Bearer ${owner.token}`)
         .expect(409);
 
-      expect(res.body.error).toBe('INVALID_VIDEO_STATUS');
+      expect(errorOf(res)).toBe('INVALID_VIDEO_STATUS');
     });
   });
 
@@ -314,7 +336,7 @@ describe('Videos (e2e)', () => {
           .get(`/videos/${init.video.slug}/${path}`)
           .set('Authorization', `Bearer ${owner.token}`)
           .expect(409);
-        expect(res.body.error).toBe('VIDEO_NOT_READY');
+        expect(errorOf(res)).toBe('VIDEO_NOT_READY');
       }
     });
 
@@ -326,7 +348,7 @@ describe('Videos (e2e)', () => {
         .set('Authorization', `Bearer ${stranger.token}`)
         .expect(404);
 
-      expect(res.body.error).toBe('VIDEO_NOT_FOUND');
+      expect(errorOf(res)).toBe('VIDEO_NOT_FOUND');
     });
 
     it('returns 404 VIDEO_NOT_FOUND for a malformed slug', async () => {
@@ -335,7 +357,7 @@ describe('Videos (e2e)', () => {
         .set('Authorization', `Bearer ${owner.token}`)
         .expect(404);
 
-      expect(res.body.error).toBe('VIDEO_NOT_FOUND');
+      expect(errorOf(res)).toBe('VIDEO_NOT_FOUND');
     });
 
     it('returns 401 without a token', async () => {

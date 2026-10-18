@@ -9,13 +9,7 @@ import { User } from '../../users/entities/user.entity';
 import { Channel } from './channel.entity';
 import { Video } from '../../videos/entities/video.entity';
 
-const ALL_ENTITIES = [
-  User,
-  Channel,
-  RefreshToken,
-  VerificationToken,
-  Video,
-];
+const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
 
 describe('Channel entity (integration)', () => {
   let dataSource: DataSource;

@@ -33,7 +33,12 @@ function toNumber(value: string | undefined): number | null {
 export function parseFrameRate(value: string | undefined): number | null {
   if (!value) return null;
   const [num, den] = value.split('/').map(Number);
-  if (!Number.isFinite(num) || !Number.isFinite(den) || den === 0 || num === 0) {
+  if (
+    !Number.isFinite(num) ||
+    !Number.isFinite(den) ||
+    den === 0 ||
+    num === 0
+  ) {
     return null;
   }
   return Math.round((num / den) * 1000) / 1000;

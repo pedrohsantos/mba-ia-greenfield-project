@@ -37,7 +37,9 @@ describe('parseProbeOutput', () => {
 
   it('should report a null audio codec for a video-only file', () => {
     const result = parseProbeOutput({
-      streams: [{ codec_type: 'video', codec_name: 'vp9', r_frame_rate: '25/1' }],
+      streams: [
+        { codec_type: 'video', codec_name: 'vp9', r_frame_rate: '25/1' },
+      ],
       format: { format_name: 'webm', duration: '2.0' },
     });
 

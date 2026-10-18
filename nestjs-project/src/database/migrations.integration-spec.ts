@@ -27,13 +27,7 @@ describe('Database migrations (integration)', () => {
 
   beforeAll(async () => {
     dataSource = createTestDataSource(
-      [
-  User,
-  Channel,
-  RefreshToken,
-  VerificationToken,
-  Video,
-],
+      [User, Channel, RefreshToken, VerificationToken, Video],
       {
         synchronize: false,
         migrations: [

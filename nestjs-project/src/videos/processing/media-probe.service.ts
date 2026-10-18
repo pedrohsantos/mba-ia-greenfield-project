@@ -49,7 +49,9 @@ export class MediaProbeService {
       '-show_streams',
       inputUrl,
     ]);
-    return parseProbeOutput(JSON.parse(stdout.toString('utf-8')) as FfprobeOutput);
+    return parseProbeOutput(
+      JSON.parse(stdout.toString('utf-8')) as FfprobeOutput,
+    );
   }
 
   /** Extracts one JPEG frame (1280 px wide, aspect ratio kept) at `atSeconds`. */

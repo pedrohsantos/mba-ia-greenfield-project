@@ -131,7 +131,10 @@ describe('VideoProcessingService (integration — Postgres + MinIO + ffmpeg)', (
     const row = await videos.findOneByOrFail({ id: video.id });
     expect(row.status).toBe(VideoStatus.FAILED);
     expect(row.failure_reason).toBeTruthy();
-    expect(error instanceof UnrecoverableError || /ffprobe/.test((error as Error).message)).toBe(true);
+    expect(
+      error instanceof UnrecoverableError ||
+        /ffprobe/.test((error as Error).message),
+    ).toBe(true);
     await storage.deleteObject(video.storage_key);
   });
 });

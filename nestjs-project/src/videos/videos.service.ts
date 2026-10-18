@@ -329,7 +329,10 @@ export class VideosService {
     return video;
   }
 
-  private async findOwnedDraft(userId: string, videoId: string): Promise<Video> {
+  private async findOwnedDraft(
+    userId: string,
+    videoId: string,
+  ): Promise<Video> {
     const video = await this.findOwnedById(userId, videoId);
     if (video.status !== VideoStatus.DRAFT || !video.upload_id) {
       throw new InvalidVideoStatusException();
@@ -362,7 +365,18 @@ export class VideosService {
   }
 
   private async insertWithUniqueSlug(
-    fields: Omit<Video, 'slug' | 'created_at' | 'updated_at' | 'channel' | 'thumbnail_key' | 'duration_seconds' | 'metadata' | 'failure_reason' | 'processed_at'>,
+    fields: Omit<
+      Video,
+      | 'slug'
+      | 'created_at'
+      | 'updated_at'
+      | 'channel'
+      | 'thumbnail_key'
+      | 'duration_seconds'
+      | 'metadata'
+      | 'failure_reason'
+      | 'processed_at'
+    >,
   ): Promise<Video> {
     for (let attempt = 1; ; attempt++) {
       try {

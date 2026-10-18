@@ -76,18 +76,26 @@ describe('Video upload → processing → streaming flow (e2e)', () => {
       .set('Authorization', `Bearer ${user.token}`)
       .send({ fileName, contentType: 'video/mp4', sizeBytes: content.length })
       .expect(201);
+    const body = init.body as {
+      video: VideoBody;
+      partSize: number;
+      parts: { partNumber: number; url: string }[];
+    };
     const parts: { partNumber: number; etag: string }[] = [];
-    for (const part of init.body.parts as { partNumber: number; url: string }[]) {
-      const start = (part.partNumber - 1) * init.body.partSize;
-      const chunk = content.subarray(start, start + init.body.partSize);
-      parts.push({ partNumber: part.partNumber, etag: await putPart(part.url, chunk) });
+    for (const part of body.parts) {
+      const start = (part.partNumber - 1) * body.partSize;
+      const chunk = content.subarray(start, start + body.partSize);
+      parts.push({
+        partNumber: part.partNumber,
+        etag: await putPart(part.url, chunk),
+      });
     }
     await request(server())
-      .post(`/videos/${init.body.video.id}/upload/complete`)
+      .post(`/videos/${body.video.id}/upload/complete`)
       .set('Authorization', `Bearer ${user.token}`)
       .send({ parts })
       .expect(202);
-    return init.body.video as VideoBody;
+    return body.video;
   }
 
   async function waitForTerminalStatus(slug: string): Promise<VideoBody> {
@@ -109,7 +117,10 @@ describe('Video upload → processing → streaming flow (e2e)', () => {
   it(
     'processes an uploaded video automatically and serves streaming (206) and download',
     async () => {
-      const uploaded = await uploadAndComplete(sampleVideo, 'aula de teste.mp4');
+      const uploaded = await uploadAndComplete(
+        sampleVideo,
+        'aula de teste.mp4',
+      );
 
       const video = await waitForTerminalStatus(uploaded.slug);
 
@@ -122,7 +133,7 @@ describe('Video upload → processing → streaming flow (e2e)', () => {
         .get(`/videos/${video.slug}/stream`)
         .set('Authorization', `Bearer ${user.token}`)
         .expect(200);
-      const partial = await fetch(stream.body.url as string, {
+      const partial = await fetch((stream.body as { url: string }).url, {
         headers: { Range: 'bytes=0-1023' },
       });
       expect(partial.status).toBe(206);
@@ -135,8 +146,9 @@ describe('Video upload → processing → streaming flow (e2e)', () => {
         .get(`/videos/${video.slug}/download`)
         .set('Authorization', `Bearer ${user.token}`)
         .expect(200);
-      expect(download.body.fileName).toBe('aula de teste.mp4');
-      const file = await fetch(download.body.url as string);
+      const downloadBody = download.body as { url: string; fileName: string };
+      expect(downloadBody.fileName).toBe('aula de teste.mp4');
+      const file = await fetch(downloadBody.url);
       expect(file.headers.get('content-disposition')).toContain(
         'attachment; filename="aula de teste.mp4"',
       );

@@ -9,13 +9,7 @@ import { RefreshToken } from './refresh-token.entity';
 import { VerificationToken } from './verification-token.entity';
 import { Video } from '../../videos/entities/video.entity';
 
-const ALL_ENTITIES = [
-  User,
-  Channel,
-  RefreshToken,
-  VerificationToken,
-  Video,
-];
+const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
 
 describe('RefreshToken entity (integration)', () => {
   let dataSource: DataSource;

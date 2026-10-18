@@ -8,6 +8,7 @@ export const TEST_QUEUE_PREFIX = 'streamtube-test';
  * Must run before the Nest testing module is compiled (config factories read process.env).
  */
 export function applyVideoTestEnv(): void {
-  process.env.S3_PUBLIC_ENDPOINT = process.env.S3_ENDPOINT ?? 'http://minio:9000';
+  process.env.S3_PUBLIC_ENDPOINT =
+    process.env.S3_ENDPOINT ?? 'http://minio:9000';
   process.env.QUEUE_PREFIX = TEST_QUEUE_PREFIX;
 }

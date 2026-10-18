@@ -12,13 +12,7 @@ import { UsersService } from './users.service';
 import { TestingModule } from '@nestjs/testing';
 import { Video } from '../videos/entities/video.entity';
 
-const ALL_ENTITIES = [
-  User,
-  Channel,
-  RefreshToken,
-  VerificationToken,
-  Video,
-];
+const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
 
 describe('UsersService (integration)', () => {
   let dataSource: DataSource;
