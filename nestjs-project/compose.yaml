@@ -17,6 +17,24 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  # Video worker: same image/codebase as the API, separate process (src/worker.ts)
+  # consuming the video-processing queue with FFmpeg. No HTTP port.
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["npm", "run", "start:worker:dev"]
+    volumes:
+      - .:/home/node/app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
   db:
     image: postgres:17
     ports:

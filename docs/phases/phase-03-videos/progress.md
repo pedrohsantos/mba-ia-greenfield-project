@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 7/11 completed
+**SIs:** 8/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -56,9 +56,13 @@
   - Frame rate is read from `avg_frame_rate` with `r_frame_rate` as fallback; `0/0` (unknown) maps to `null`.
 
 ### SI-03.8 — Processar vídeos no worker dedicado (fila → metadados → thumbnail)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 30/30 passing (video-processing.service.spec.ts, video-processing.processor.spec.ts, video-processing.service.integration-spec.ts, video-processing.module.spec.ts + SI-03.7 files in the same folder); `video-worker` container running and logging `Video worker started — consuming video-processing`
+- **Observations:** 
+  - `WorkerModule` imports `UsersModule` (which brings `ChannelsModule`): with `autoLoadEntities`, `Video#channel` metadata only builds when `Channel`/`User` are registered too.
+  - `start:worker:dev` compiles with `tsconfig.worker.json` into `dist-worker/` so the worker's watch build (`deleteOutDir`) never wipes the API's `dist/` on the shared volume; `tsconfig.json`/`tsconfig.build.json` exclude `dist-worker` and `.gitignore` ignores it.
+  - Status updates in the worker are guarded with `WHERE status = 'processing'` so a late/duplicate job can never overwrite a terminal status.
+  - The first `nest start --watch` compile in the worker container takes ~3 min on this Windows bind mount before the context boots.
 
 ### SI-03.9 — Consultar vídeo, streaming e download por URL única
 - **Status:** pending
