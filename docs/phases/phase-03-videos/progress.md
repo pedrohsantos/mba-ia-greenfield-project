@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 8/11 completed
+**SIs:** 9/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -65,9 +65,10 @@
   - The first `nest start --watch` compile in the worker container takes ~3 min on this Windows bind mount before the context boots.
 
 ### SI-03.9 — Consultar vídeo, streaming e download por URL única
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 38/38 passing (videos.service.spec.ts 18 unit; videos.e2e-spec.ts 20 e2e)
+- **Observations:** 
+  - Malformed slugs are rejected as `VIDEO_NOT_FOUND` before any query (no validation error leaks the slug format).
 
 ### SI-03.10 — Fluxo completo de upload, processamento e streaming (E2E)
 - **Status:** pending

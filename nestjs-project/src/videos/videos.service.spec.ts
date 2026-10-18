@@ -12,6 +12,7 @@ import {
   UploadPartsInvalidException,
   UploadSizeMismatchException,
   VideoNotFoundException,
+  VideoNotReadyException,
 } from './exceptions/video.exceptions';
 import { VideoStatus } from './video-status.enum';
 import {
@@ -323,6 +324,44 @@ describe('VideosService', () => {
       await expect(
         service.abortUpload(USER_ID, 'video-1'),
       ).rejects.toBeInstanceOf(InvalidVideoStatusException);
+    });
+  });
+
+  describe('playback', () => {
+    it('should report VIDEO_NOT_FOUND for a malformed slug without querying', async () => {
+      await expect(service.getStreamUrl(USER_ID, 'abc')).rejects.toBeInstanceOf(
+        VideoNotFoundException,
+      );
+      expect(repo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should refuse to stream a video that is not ready', async () => {
+      repo.findOne.mockResolvedValue(buildVideo({ status: VideoStatus.PROCESSING }));
+
+      await expect(
+        service.getStreamUrl(USER_ID, 'AbCdEfGhIjK'),
+      ).rejects.toBeInstanceOf(VideoNotReadyException);
+      expect(storage.presignGetObject).not.toHaveBeenCalled();
+    });
+
+    it('should presign an attachment download named after the original file', async () => {
+      repo.findOne.mockResolvedValue(buildVideo({ status: VideoStatus.READY }));
+      storage.presignGetObject.mockResolvedValue({
+        url: 'http://minio/dl',
+        expiresAt: new Date('2026-01-01T01:00:00Z'),
+      });
+
+      const result = await service.getDownloadUrl(USER_ID, 'AbCdEfGhIjK');
+
+      expect(storage.presignGetObject).toHaveBeenCalledWith(
+        'videos/video-1/original',
+        { endpoint: 'public', downloadFileName: 'aula.mp4' },
+      );
+      expect(result).toEqual({
+        url: 'http://minio/dl',
+        expiresAt: '2026-01-01T01:00:00.000Z',
+        fileName: 'aula.mp4',
+      });
     });
   });
 });

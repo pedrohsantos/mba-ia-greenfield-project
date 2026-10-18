@@ -288,4 +288,60 @@ describe('Videos (e2e)', () => {
       expect(res.body.error).toBe('INVALID_VIDEO_STATUS');
     });
   });
+
+  describe('GET /videos/:slug, /stream, /download', () => {
+    it('returns the video to its owner', async () => {
+      const init = await initiate(owner);
+
+      const res = await request(server())
+        .get(`/videos/${init.video.slug}`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        id: init.video.id,
+        slug: init.video.slug,
+        status: 'draft',
+        thumbnailUrl: null,
+      });
+    });
+
+    it('returns 409 VIDEO_NOT_READY when streaming or downloading a draft', async () => {
+      const init = await initiate(owner);
+
+      for (const path of ['stream', 'download']) {
+        const res = await request(server())
+          .get(`/videos/${init.video.slug}/${path}`)
+          .set('Authorization', `Bearer ${owner.token}`)
+          .expect(409);
+        expect(res.body.error).toBe('VIDEO_NOT_READY');
+      }
+    });
+
+    it('returns 404 VIDEO_NOT_FOUND to another user', async () => {
+      const init = await initiate(owner);
+
+      const res = await request(server())
+        .get(`/videos/${init.video.slug}/stream`)
+        .set('Authorization', `Bearer ${stranger.token}`)
+        .expect(404);
+
+      expect(res.body.error).toBe('VIDEO_NOT_FOUND');
+    });
+
+    it('returns 404 VIDEO_NOT_FOUND for a malformed slug', async () => {
+      const res = await request(server())
+        .get('/videos/abc')
+        .set('Authorization', `Bearer ${owner.token}`)
+        .expect(404);
+
+      expect(res.body.error).toBe('VIDEO_NOT_FOUND');
+    });
+
+    it('returns 401 without a token', async () => {
+      const init = await initiate(owner);
+
+      await request(server()).get(`/videos/${init.video.slug}`).expect(401);
+    });
+  });
 });

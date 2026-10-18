@@ -9,6 +9,10 @@ import { ChannelsService } from '../channels/channels.service';
 import { InvalidMultipartUploadError } from '../storage/storage.errors';
 import { StorageService } from '../storage/storage.service';
 import type { CompletedPartDto } from './dto/complete-upload.dto';
+import type {
+  DownloadUrlResponseDto,
+  StreamUrlResponseDto,
+} from './dto/playback-response.dto';
 import type { InitiateUploadDto } from './dto/initiate-upload.dto';
 import type {
   InitiateUploadResponseDto,
@@ -24,8 +28,9 @@ import {
   UploadPartsInvalidException,
   UploadSizeMismatchException,
   VideoNotFoundException,
+  VideoNotReadyException,
 } from './exceptions/video.exceptions';
-import { generateVideoSlug } from './video-slug.util';
+import { VIDEO_SLUG_PATTERN, generateVideoSlug } from './video-slug.util';
 import { VideoStatus } from './video-status.enum';
 import {
   VIDEO_PART_SIZE_BYTES,
@@ -243,6 +248,54 @@ export class VideosService {
     return video;
   }
 
+  /** Owner-only lookup by the unique URL slug; malformed slugs are simply not found. */
+  async findOwnedBySlug(userId: string, slug: string): Promise<Video> {
+    if (!VIDEO_SLUG_PATTERN.test(slug)) {
+      throw new VideoNotFoundException();
+    }
+    const video = await this.videoRepository.findOne({
+      where: { slug, channel: { user_id: userId } },
+      relations: { channel: true },
+    });
+    if (!video) {
+      throw new VideoNotFoundException();
+    }
+    return video;
+  }
+
+  async getVideo(userId: string, slug: string): Promise<VideoResponseDto> {
+    return this.toResponse(await this.findOwnedBySlug(userId, slug));
+  }
+
+  /** Hands off playback to storage: it serves Range requests (206) on the presigned URL. */
+  async getStreamUrl(
+    userId: string,
+    slug: string,
+  ): Promise<StreamUrlResponseDto> {
+    const video = await this.findOwnedReady(userId, slug);
+    const { url, expiresAt } = await this.storageService.presignGetObject(
+      video.storage_key,
+      { endpoint: 'public' },
+    );
+    return { url, expiresAt: expiresAt.toISOString() };
+  }
+
+  async getDownloadUrl(
+    userId: string,
+    slug: string,
+  ): Promise<DownloadUrlResponseDto> {
+    const video = await this.findOwnedReady(userId, slug);
+    const { url, expiresAt } = await this.storageService.presignGetObject(
+      video.storage_key,
+      { endpoint: 'public', downloadFileName: video.original_filename },
+    );
+    return {
+      url,
+      expiresAt: expiresAt.toISOString(),
+      fileName: video.original_filename,
+    };
+  }
+
   async toResponse(video: Video): Promise<VideoResponseDto> {
     const thumbnailUrl = video.thumbnail_key
       ? (
@@ -266,6 +319,14 @@ export class VideosService {
       createdAt: video.created_at.toISOString(),
       updatedAt: video.updated_at.toISOString(),
     };
+  }
+
+  private async findOwnedReady(userId: string, slug: string): Promise<Video> {
+    const video = await this.findOwnedBySlug(userId, slug);
+    if (video.status !== VideoStatus.READY) {
+      throw new VideoNotReadyException();
+    }
+    return video;
   }
 
   private async findOwnedDraft(userId: string, videoId: string): Promise<Video> {
