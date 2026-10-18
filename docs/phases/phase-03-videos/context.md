@@ -397,7 +397,8 @@ _(phases-reader equivalent — compact list from prior phases)_
 - Services throw `DomainException` subclasses (`errorCode`, `httpStatus`); `DomainExceptionFilter` maps them to `{ statusCode, error, message }`. _(from phase 02)_
 - Global `ValidationPipe({ whitelist, forbidNonWhitelisted, transform })` + `ValidationExceptionFilter`; DTOs use `class-validator`. _(from phase 02)_
 - Each domain owns its entity and service (e.g., `ChannelsService` owns channel creation); no cross-domain entity writes. _(from phase 02)_
-- Unique-violation retries inside a transaction use SAVEPOINT / ROLLBACK TO SAVEPOINT (nickname collision pattern). _(from phase 02)_
+- Unique collisions on generated identifiers are retried: pre-check + catch PG `23505` on the column, bounded retries (nickname pattern after SI-02.15). _(from phase 02)_
+- Rate limiting is applied by a global `ThrottlerGuard`; non-auth controllers opt out with `@SkipThrottle()` (as `AppController`). _(from phase 02)_
 - Integration/e2e suites share the `db` service and run `--runInBand`; migration tests import migration classes directly. _(from phase 02)_
 - Plans use Portuguese prose with English identifiers; each SI cites the TDs it implements inline as backticked refs. _(from phase 02)_
 
