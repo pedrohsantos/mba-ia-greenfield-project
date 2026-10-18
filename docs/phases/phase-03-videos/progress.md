@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 5/11 completed
+**SIs:** 6/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -43,9 +43,11 @@
   - Pre-existing gap (out of scope): `npm run openapi:export` runs through ts-node, so the `@nestjs/swagger` CLI plugin is not applied and request DTO schemas come out empty in `openapi.json` (already true for `RegisterDto` etc.). Response DTOs here use explicit `@ApiProperty` per the DTO rule, so they export correctly.
 
 ### SI-03.6 — Concluir e abortar upload com enfileiramento do processamento
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 41/41 passing (videos.service.spec.ts + videos.service.integration-spec.ts + videos.module.spec.ts + video-slug.util.spec.ts = 26; videos.e2e-spec.ts = 15)
+- **Observations:** 
+  - `abortUpload` tolerates `NoSuchUpload` from storage (upload already expired/aborted) and still marks the video `failed` — an intentional conversion to a valid result per the service error rule, documented inline.
+  - Size-mismatch path persists `failure_reason = 'UPLOAD_SIZE_MISMATCH'` (same code as the Error Catalog) before throwing.
 
 ### SI-03.7 — Implementar MediaProbeService (ffprobe/ffmpeg)
 - **Status:** pending

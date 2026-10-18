@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -19,6 +20,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 import type { JwtPayload } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
+import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { InitiateUploadDto } from './dto/initiate-upload.dto';
 import { SignPartsDto } from './dto/sign-parts.dto';
 import {
@@ -26,6 +28,7 @@ import {
   SignedPartsResponseDto,
   UploadStatusResponseDto,
 } from './dto/upload-response.dto';
+import { VideoResponseDto } from './dto/video-response.dto';
 import { VideosService } from './videos.service';
 
 const errorSchema = { $ref: getSchemaPath(ApiErrorEnvelope) };
@@ -142,5 +145,76 @@ export class VideosController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<UploadStatusResponseDto> {
     return this.videosService.getUploadStatus(user.sub, id);
+  }
+
+  @Post(':id/upload/complete')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Complete a video upload',
+    description:
+      'Completes the multipart upload with the uploaded parts and their ETags, verifies the stored size, moves the video to processing and enqueues the video.process job (metadata + thumbnail run in the background worker).',
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'Upload completed; processing scheduled',
+    type: VideoResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Validation failed, invalid parts (UPLOAD_PARTS_INVALID) or size mismatch (UPLOAD_SIZE_MISMATCH)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found (VIDEO_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not a draft (INVALID_VIDEO_STATUS)',
+    schema: errorSchema,
+  })
+  async completeUpload(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CompleteUploadDto,
+  ): Promise<VideoResponseDto> {
+    return this.videosService.completeUpload(user.sub, id, dto.parts);
+  }
+
+  @Delete(':id/upload')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Abort a video upload',
+    description:
+      'Aborts the in-progress multipart upload (storage frees the parts) and marks the video as failed with reason UPLOAD_ABORTED.',
+  })
+  @ApiResponse({ status: 204, description: 'Upload aborted' })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid token',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found (VIDEO_NOT_FOUND)',
+    schema: errorSchema,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not a draft (INVALID_VIDEO_STATUS)',
+    schema: errorSchema,
+  })
+  async abortUpload(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.videosService.abortUpload(user.sub, id);
   }
 }

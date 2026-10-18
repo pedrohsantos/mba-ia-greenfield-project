@@ -1,8 +1,10 @@
 import { randomUUID } from 'crypto';
+import { getQueueToken } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import type { Queue } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { VerificationToken } from '../auth/entities/verification-token.entity';
@@ -20,6 +22,7 @@ import { applyVideoTestEnv } from '../test/video-test-env';
 import { User } from '../users/entities/user.entity';
 import { Video } from './entities/video.entity';
 import { VideoStatus } from './video-status.enum';
+import { VIDEO_PROCESS_JOB, VIDEO_PROCESSING_QUEUE } from './videos.constants';
 import { VideosModule } from './videos.module';
 import { VideosService } from './videos.service';
 
@@ -30,6 +33,7 @@ describe('VideosService (integration — Postgres + MinIO)', () => {
   let dataSource: DataSource;
   let service: VideosService;
   let storage: StorageService;
+  let queue: Queue;
   let userId: string;
 
   beforeAll(async () => {
@@ -51,9 +55,11 @@ describe('VideosService (integration — Postgres + MinIO)', () => {
     dataSource = moduleRef.get(DataSource);
     service = moduleRef.get(VideosService);
     storage = moduleRef.get(StorageService);
+    queue = moduleRef.get(getQueueToken(VIDEO_PROCESSING_QUEUE));
   }, 30000);
 
   afterAll(async () => {
+    await queue.obliterate({ force: true });
     await moduleRef.close();
   });
 
@@ -85,5 +91,34 @@ describe('VideosService (integration — Postgres + MinIO)', () => {
     ).resolves.toEqual([]);
 
     await storage.abortMultipartUpload(row.storage_key, result.uploadId);
+  });
+
+  it('completes the upload, moves the row to processing and enqueues video.process', async () => {
+    const init = await service.initiateUpload(userId, {
+      fileName: 'aula.mp4',
+      contentType: 'video/mp4',
+      sizeBytes: 2048,
+    });
+    const res = await fetch(init.parts[0].url, {
+      method: 'PUT',
+      body: new Uint8Array(2048),
+    });
+    const etag = res.headers.get('etag') as string;
+
+    const result = await service.completeUpload(userId, init.video.id, [
+      { partNumber: 1, etag },
+    ]);
+
+    expect(result.status).toBe(VideoStatus.PROCESSING);
+    const row = await dataSource
+      .getRepository(Video)
+      .findOneByOrFail({ id: init.video.id });
+    expect(row.status).toBe(VideoStatus.PROCESSING);
+    expect(row.upload_id).toBeNull();
+    const job = await queue.getJob(init.video.id);
+    expect(job?.name).toBe(VIDEO_PROCESS_JOB);
+    expect(job?.data).toEqual({ videoId: init.video.id });
+
+    await storage.deleteObject(row.storage_key);
   });
 });

@@ -1,6 +1,9 @@
 import { randomBytes } from 'crypto';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import request from 'supertest';
 import { cleanAllTables } from '../src/test/create-test-data-source';
+import { VIDEO_PROCESSING_QUEUE } from '../src/videos/videos.constants';
 import {
   bootstrapVideosApp,
   createAuthenticatedUser,
@@ -33,6 +36,9 @@ describe('Videos (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
+    await ctx.moduleRef
+      .get<Queue>(getQueueToken(VIDEO_PROCESSING_QUEUE))
+      .obliterate({ force: true });
     await ctx.app.close();
   });
 
@@ -191,6 +197,95 @@ describe('Videos (e2e)', () => {
         .expect(400);
 
       expect(res.body.error).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('complete and abort', () => {
+    async function uploadSinglePart(user: AuthenticatedUser) {
+      const init = await initiate(user);
+      const etag = await putPart(init.parts[0].url, randomBytes(1024));
+      return { init, etag };
+    }
+
+    it('POST /videos/:id/upload/complete returns 202 processing with JSON only (no file bytes)', async () => {
+      const { init, etag } = await uploadSinglePart(owner);
+
+      const res = await request(server())
+        .post(`/videos/${init.video.id}/upload/complete`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({ parts: [{ partNumber: 1, etag }] })
+        .expect(202);
+
+      expect(res.body).toMatchObject({ id: init.video.id, status: 'processing' });
+      const job = await ctx.moduleRef
+        .get<Queue>(getQueueToken(VIDEO_PROCESSING_QUEUE))
+        .getJob(init.video.id);
+      expect(job?.data).toEqual({ videoId: init.video.id });
+    });
+
+    it('returns 409 INVALID_VIDEO_STATUS when completing twice', async () => {
+      const { init, etag } = await uploadSinglePart(owner);
+      const body = { parts: [{ partNumber: 1, etag }] };
+      await request(server())
+        .post(`/videos/${init.video.id}/upload/complete`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send(body)
+        .expect(202);
+
+      const res = await request(server())
+        .post(`/videos/${init.video.id}/upload/complete`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send(body)
+        .expect(409);
+
+      expect(res.body.error).toBe('INVALID_VIDEO_STATUS');
+    });
+
+    it('returns 400 UPLOAD_PARTS_INVALID for a tampered ETag and keeps the draft', async () => {
+      const { init } = await uploadSinglePart(owner);
+
+      const res = await request(server())
+        .post(`/videos/${init.video.id}/upload/complete`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({ parts: [{ partNumber: 1, etag: '"deadbeefdeadbeefdeadbeefdeadbeef"' }] })
+        .expect(400);
+
+      expect(res.body.error).toBe('UPLOAD_PARTS_INVALID');
+      const [{ status }] = await ctx.dataSource.query<{ status: string }[]>(
+        `SELECT status FROM videos WHERE id = $1`,
+        [init.video.id],
+      );
+      expect(status).toBe('draft');
+    });
+
+    it('DELETE /videos/:id/upload aborts the draft and marks it failed', async () => {
+      const { init } = await uploadSinglePart(owner);
+
+      await request(server())
+        .delete(`/videos/${init.video.id}/upload`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .expect(204);
+
+      const [row] = await ctx.dataSource.query<
+        { status: string; failure_reason: string }[]
+      >(`SELECT status, failure_reason FROM videos WHERE id = $1`, [init.video.id]);
+      expect(row).toEqual({ status: 'failed', failure_reason: 'UPLOAD_ABORTED' });
+    });
+
+    it('returns 409 when aborting a video that is already processing', async () => {
+      const { init, etag } = await uploadSinglePart(owner);
+      await request(server())
+        .post(`/videos/${init.video.id}/upload/complete`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({ parts: [{ partNumber: 1, etag }] })
+        .expect(202);
+
+      const res = await request(server())
+        .delete(`/videos/${init.video.id}/upload`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .expect(409);
+
+      expect(res.body.error).toBe('INVALID_VIDEO_STATUS');
     });
   });
 });

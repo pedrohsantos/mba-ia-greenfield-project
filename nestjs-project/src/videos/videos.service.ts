@@ -1,11 +1,14 @@
 import { randomUUID } from 'crypto';
 import { parse } from 'path';
 import { Injectable } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { Queue } from 'bullmq';
 import { QueryFailedError, Repository } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import { InvalidMultipartUploadError } from '../storage/storage.errors';
 import { StorageService } from '../storage/storage.service';
+import type { CompletedPartDto } from './dto/complete-upload.dto';
 import type { InitiateUploadDto } from './dto/initiate-upload.dto';
 import type {
   InitiateUploadResponseDto,
@@ -19,16 +22,26 @@ import {
   ChannelNotFoundException,
   InvalidVideoStatusException,
   UploadPartsInvalidException,
+  UploadSizeMismatchException,
   VideoNotFoundException,
 } from './exceptions/video.exceptions';
 import { generateVideoSlug } from './video-slug.util';
 import { VideoStatus } from './video-status.enum';
-import { VIDEO_PART_SIZE_BYTES, VIDEO_STORAGE_KEYS } from './videos.constants';
+import {
+  VIDEO_PART_SIZE_BYTES,
+  VIDEO_PROCESS_JOB,
+  VIDEO_PROCESS_JOB_OPTIONS,
+  VIDEO_PROCESSING_QUEUE,
+  VIDEO_STORAGE_KEYS,
+} from './videos.constants';
+import type { VideoProcessJobData } from './videos.constants';
 
 const PG_UNIQUE_VIOLATION = '23505';
 const SLUG_COLUMN = 'slug';
 const MAX_SLUG_ATTEMPTS = 5;
 const TITLE_MAX_LENGTH = 100;
+const UPLOAD_ABORTED_REASON = 'UPLOAD_ABORTED';
+const SIZE_MISMATCH_REASON = 'UPLOAD_SIZE_MISMATCH';
 
 function isUniqueViolationOn(err: unknown, column: string): boolean {
   if (!(err instanceof QueryFailedError)) return false;
@@ -47,6 +60,8 @@ export class VideosService {
     private readonly videoRepository: Repository<Video>,
     private readonly channelsService: ChannelsService,
     private readonly storageService: StorageService,
+    @InjectQueue(VIDEO_PROCESSING_QUEUE)
+    private readonly processingQueue: Queue<VideoProcessJobData>,
   ) {}
 
   /** Pre-registers the video as `draft` and opens a direct-to-storage multipart upload. */
@@ -140,6 +155,80 @@ export class VideosService {
       partCount: partCountFor(video.size_bytes),
       uploadedParts,
     };
+  }
+
+  /**
+   * Completes the multipart upload, verifies the stored size, moves the video to
+   * `processing` and only then enqueues `video.process` (status committed first).
+   */
+  async completeUpload(
+    userId: string,
+    videoId: string,
+    parts: CompletedPartDto[],
+  ): Promise<VideoResponseDto> {
+    const video = await this.findOwnedDraft(userId, videoId);
+    const uploadId = video.upload_id as string;
+
+    try {
+      await this.storageService.completeMultipartUpload(
+        video.storage_key,
+        uploadId,
+        parts,
+      );
+    } catch (err) {
+      if (err instanceof InvalidMultipartUploadError) {
+        throw new UploadPartsInvalidException();
+      }
+      throw err;
+    }
+
+    const storedSize = await this.storageService.getObjectSize(
+      video.storage_key,
+    );
+    if (storedSize !== video.size_bytes) {
+      await this.storageService.deleteObject(video.storage_key);
+      await this.videoRepository.update(video.id, {
+        status: VideoStatus.FAILED,
+        failure_reason: SIZE_MISMATCH_REASON,
+        upload_id: null,
+      });
+      throw new UploadSizeMismatchException();
+    }
+
+    await this.videoRepository.update(video.id, {
+      status: VideoStatus.PROCESSING,
+      upload_id: null,
+    });
+    await this.processingQueue.add(
+      VIDEO_PROCESS_JOB,
+      { videoId: video.id },
+      { ...VIDEO_PROCESS_JOB_OPTIONS, jobId: video.id },
+    );
+
+    return this.toResponse(
+      await this.videoRepository.findOneByOrFail({ id: video.id }),
+    );
+  }
+
+  /** Aborts an in-progress upload: storage drops the parts, the video becomes `failed`. */
+  async abortUpload(userId: string, videoId: string): Promise<void> {
+    const video = await this.findOwnedDraft(userId, videoId);
+    try {
+      await this.storageService.abortMultipartUpload(
+        video.storage_key,
+        video.upload_id as string,
+      );
+    } catch (err) {
+      // Already expired/aborted on the storage side — nothing left to free.
+      if (!(err instanceof InvalidMultipartUploadError)) {
+        throw err;
+      }
+    }
+    await this.videoRepository.update(video.id, {
+      status: VideoStatus.FAILED,
+      failure_reason: UPLOAD_ABORTED_REASON,
+      upload_id: null,
+    });
   }
 
   /** Owner-only lookup: videos of other channels are reported as not found. */
