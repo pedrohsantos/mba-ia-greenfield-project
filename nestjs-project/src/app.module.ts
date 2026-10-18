@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigType } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -13,6 +13,8 @@ import queueConfig from './config/queue.config';
 import storageConfig from './config/storage.config';
 import swaggerConfig from './config/swagger.config';
 import { envValidationSchema } from './config/env.validation';
+import { typeOrmOptionsFactory } from './database/typeorm-options.factory';
+import { QueueModule } from './queue/queue.module';
 
 @Module({
   imports: [
@@ -33,17 +35,9 @@ import { envValidationSchema } from './config/env.validation';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [databaseConfig.KEY],
-      useFactory: (dbConfig: ConfigType<typeof databaseConfig>) => ({
-        type: 'postgres',
-        host: dbConfig.host,
-        port: dbConfig.port,
-        username: dbConfig.username,
-        password: dbConfig.password,
-        database: dbConfig.name,
-        autoLoadEntities: true,
-        synchronize: false,
-      }),
+      useFactory: typeOrmOptionsFactory,
     }),
+    QueueModule,
     AuthModule,
     VideosModule,
   ],

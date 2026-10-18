@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 3/11 completed
+**SIs:** 4/11 completed
 
 ### SI-03.1 — Infra: dependências, configuração e serviços de storage/fila no Compose
 - **Status:** completed
@@ -29,9 +29,11 @@
   - `migrations.integration-spec.ts` now also drops leftover enum types before re-applying — fixes the pre-existing `type "verification_tokens_type_enum" already exists` failure seen in the baseline run.
 
 ### SI-03.4 — Infra: fila BullMQ compartilhada e contrato do job
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 3/3 passing (queue.module.integration-spec.ts, videos.module.spec.ts); existing e2e 52/52 with the extracted TypeORM factory
+- **Observations:** 
+  - BullMQ 6 no longer exposes `Queue#client`; the prefix assertion uses a separate ioredis client to look up the job key.
+  - Fixed a `tsc` error found while checking: `fetch` in `storage.service.integration-spec.ts` (SI-03.2) needed `Uint8Array` instead of `Buffer` as body type.
 
 ### SI-03.5 — Iniciar upload com pré-cadastro em rascunho e retomada
 - **Status:** pending
